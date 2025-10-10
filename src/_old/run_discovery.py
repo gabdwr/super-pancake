@@ -1,5 +1,5 @@
 import os
-from src.discovery.old_dexscreener import Dexscreener
+from src._old.old_dexscreener import Dexscreener
 from src.utils.telegram_alerts import get_telegram_alert
 
 def test_dandl():
