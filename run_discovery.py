@@ -1,10 +1,11 @@
 import os
-from src.discovery.dexscreener import Dexscreener
+from src.discovery.old_dexscreener import Dexscreener
 from src.utils.telegram_alerts import get_telegram_alert
 
 def test_dandl():
     api = Dexscreener()
     telegram = get_telegram_alert()
+    send_telegram = False # Make this True if you want to enable alerts
 
     # Load filter settings from environment (or use defaults)
     min_liquidity = int(os.getenv('DISCOVERY_MIN_LIQUIDITY', '10000'))
@@ -13,15 +14,16 @@ def test_dandl():
     alert_threshold = int(os.getenv('DISCOVERY_ALERT_THRESHOLD', '60'))
 
     # Send script start notification
-    telegram.send_script_start_alert(
-        script_name="Token Discovery & Liquidity Analysis",
-        filters={
-            "Min Liquidity": f"${min_liquidity:,}",
-            "Max Age": f"{max_age_days} days",
-            "Min Score": f"{min_score}/100",
-            "Alert Threshold": f"{alert_threshold}/100"
-        }
-    )
+    if send_telegram:
+        telegram.send_script_start_alert(
+            script_name="Token Discovery & Liquidity Analysis",
+            filters={
+                "Min Liquidity": f"${min_liquidity:,}",
+                "Max Age": f"{max_age_days} days",
+                "Min Score": f"{min_score}/100",
+                "Alert Threshold": f"{alert_threshold}/100"
+            }
+        )
 
     # Test: Discover latest BSC tokens
     print("Test: Discover Latest BSC Tokens")
@@ -86,29 +88,31 @@ def test_dandl():
                     print(f"      Flags: {', '.join(liq['flags'])}")
 
                 # Send Telegram alert for tokens that pass alert threshold
-                if liq['total_score'] >= alert_threshold:
-                    tokens_passed_filters += 1
+                if send_telegram:
+                    if liq['total_score'] >= alert_threshold:
+                        tokens_passed_filters += 1
 
-                    # Different emoji based on score
-                    if liq['total_score'] >= 80:
-                        status = "✅ SAFE"
-                    elif liq['total_score'] >= 70:
-                        status = "⚠️ CAUTION"
-                    else:
-                        status = "🔶 RISKY"
+                        # Different emoji based on score
+                        if liq['total_score'] >= 80:
+                            status = "✅ SAFE"
+                        elif liq['total_score'] >= 70:
+                            status = "⚠️ CAUTION"
+                        else:
+                            status = "🔶 RISKY"
 
-                    print(f"\n   📱 Sending Telegram alert ({status})...")
-                    telegram.send_token_discovery_alert(token_info)
+                        print(f"\n   📱 Sending Telegram alert ({status})...")
+                        telegram.send_token_discovery_alert(token_info)
 
     print("\n" + "=" * 70)
     print("✅ All tests complete!")
 
     # Send completion summary
-    telegram.send_script_complete_alert(
-        script_name="Token Discovery & Liquidity Analysis",
-        tokens_found=len(tokens),
-        tokens_passed=tokens_passed_filters
-    )
+    if send_telegram:
+        telegram.send_script_complete_alert(
+            script_name="Token Discovery & Liquidity Analysis",
+            tokens_found=len(tokens),
+            tokens_passed=tokens_passed_filters
+        )
 
 if __name__ == "__main__":
     test_dandl()

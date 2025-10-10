@@ -50,7 +50,7 @@ class TelegramAlert:
         if not self.enabled:
             logger.warning("⚠️  Telegram alerts disabled: Missing bot token or chat ID")
         else:
-            logger.info("✅ Telegram alerts enabled")
+            logger.info("✅ Telegram bot is enabled (token and chat id are working!)")
 
     def send_message(self, message: str, parse_mode: str = "Markdown", disable_preview: bool = True) -> bool:
         """

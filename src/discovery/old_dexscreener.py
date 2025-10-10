@@ -115,6 +115,7 @@ class Dexscreener:
             )
             if response.status_code == 200:
                 data = response.json()
+                print(f"Found: {len(data.get('pairs'))} pairs")
                 return data.get('pairs', [])
             else:
                 print(f"❌ Search error: HTTP {response.status_code}")
@@ -257,25 +258,68 @@ class Dexscreener:
             List of token pair data
         """
         print("🔍 Discovering BSC tokens...")
-        # Token addresses that are common on BSC
+
+        # Expanded search terms - BSC-native and popular tokens
         SEARCH_TERMS = {
-            "WBNB": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",   # Wrapped BNB (primary)
-            "USDT": "0x55d398326f99059fF775485246999027B3197955",   # Tether
-            "USDC": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",   # USD Coin
-            "BUSD": "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56",   # Binance USD (legacy)
+            # Stablecoins & Wrapped Assets (BSC versions)
+            "WBNB": "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",   # Wrapped BNB
+            "USDT": "0x55d398326f99059fF775485246999027B3197955",   # Tether (BSC)
+            "USDC": "0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d",   # USD Coin (BSC)
+            "BUSD": "0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56",   # Binance USD
             "FDUSD": "0xc5f0f7b66764F6ec8C8Dff7BA683102295E16409",  # First Digital USD
-            "CAKE": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",   # PancakeSwap token
-            "WETH": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",   # Bridged Ethereum
-            "BTCB": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",   # Bridged Bitcoin
+
+            # DEX Tokens (BSC-native)
+            "CAKE": "0x0E09FaBB73Bd3Ade0a17ECC321fD13a19e81cE82",   # PancakeSwap
+            "BABY": "0x53E562b9B7E5E94b81f10e96Ee70Ad06df3D2657",   # BabySwap
+            "BANANA": "0x603c7f932ED1fc6575303D8Fb018fDCBb0f39a95", # ApeSwap
+            "BISWAP": "0x965F527D9159dCe6288a2219DB51fc6Eef120dD1", # Biswap
+
+            # Popular BSC-Native Meme/Community Tokens
+            "SAFEMOON": "0x8076C74C5e3F5852037F31Ff0093Eeb8c8ADd8D3", # SafeMoon V2
+            "BABYDOGE": "0xc748673057861a797275CD8A068AbB95A902e8de", # Baby Doge Coin
+            "FLOKI": "0xfb5B838b6cfEEdC2873aB27866079AC55363D37E",  # Floki Inu (BSC)
+            "SHIB": "0x2859e4544C4bB03966803b044A93563Bd2D0DD4D",   # SHIB (BSC bridged)
+
+            # Gaming & Metaverse (BSC)
+            "GALA": "0x7dDEE176F665cD201F93eEDE625770E2fD911990",   # Gala Games (BSC)
+            "SAND": "0x67b725d7e342d7B611fa85e859Df9697D9378B2e",   # The Sandbox (BSC)
+            "MBOX": "0x3203c9E46cA618C8C1cE5dC67e7e9D75f5da2377",   # Mobox
+
+            # DeFi Tokens (BSC)
+            "XVS": "0xcF6BB5389c92Bdda8a3747Ddb454cB7a64626C63",    # Venus
+            "ALPACA": "0x8F0528cE5eF7B51152A59745bEfDD91D97091d2F", # Alpaca Finance
+            "BELT": "0xE0e514c71282b6f4e823703a39374Cf58dc3eA4f",  # Belt Finance
+
+            # Bridged Major Assets
+            "WETH": "0x2170Ed0880ac9A755fd29B2688956BD959F933F8",   # Wrapped ETH
+            "BTCB": "0x7130d2A12B9BCbFAe4f2634d864A1Ee1Ce3Ead9c",   # Bitcoin BEP20
+            "DOT": "0x7083609fCE4d1d8Dc0C979AAb8c869Ea2C873402",    # Polkadot (BSC)
+            "ADA": "0x3EE2200Efb3400fAbB9AacF31297cBdD1d435D47",    # Cardano (BSC)
         }
+
         all_pairs = []
 
+        # Step 1: Try to get latest token profiles (boosted/promoted tokens)
+        print("   Fetching latest token profiles...")
+        try:
+            profiles = self.get_latest_token_profiles()
+            if profiles:
+                # Extract BSC pairs from profiles
+                for profile in profiles:
+                    if profile.get('chainId') == 'bsc':
+                        all_pairs.append(profile)
+                print(f"   Found {len([p for p in profiles if p.get('chainId') == 'bsc'])} BSC tokens from profiles")
+        except Exception as e:
+            logger.warning(f"Could not fetch token profiles: {e}")
+
+        # Step 2: Search via popular tokens
         for term, address in SEARCH_TERMS.items():
             print(f"   Searching: {term}...")
             pairs = self.search_pairs(address)
 
             # Filter for BSC only and exclude base token matches
             bsc_pairs = [p for p in pairs if p.get('chainId') == 'bsc' and p.get('baseToken', {}).get('address', '').lower() != address.lower()]
+            print(f"   Found {len(bsc_pairs)} BSC pairs")
             all_pairs.extend(bsc_pairs)
 
             # Small delay between searches
@@ -314,19 +358,19 @@ class Dexscreener:
             if market_cap > max_market_cap_usd:
                 continue
 
-            # Check token creation date via BSCScan
-            token_creation_date = self.get_token_creation_date(token_addr)
-            if token_creation_date:
-                if token_creation_date < token_age_cutoff_min:
-                    logger.info(f"   Skipping {pair.get('baseToken', {}).get('symbol')} - too old ({(datetime.now() - token_creation_date).days} days)")
-                    continue
-                if token_creation_date > token_age_cutoff_max:
-                    logger.info(f"   Skipping {pair.get('baseToken', {}).get('symbol')} - too young ({(datetime.now() - token_creation_date).days} days)")
-                    continue
-            else:
-                # If we can't verify token age, skip it to be safe
-                logger.warning(f"   Skipping {pair.get('baseToken', {}).get('symbol')} - couldn't verify token age")
-                continue
+            # # Check token creation date via BSCScan
+            # token_creation_date = self.get_token_creation_date(token_addr)
+            # if token_creation_date:
+            #     if token_creation_date < token_age_cutoff_min:
+            #         logger.info(f"   Skipping {pair.get('baseToken', {}).get('symbol')} - too old ({(datetime.now() - token_creation_date).days} days)")
+            #         continue
+            #     if token_creation_date > token_age_cutoff_max:
+            #         logger.info(f"   Skipping {pair.get('baseToken', {}).get('symbol')} - too young ({(datetime.now() - token_creation_date).days} days)")
+            #         continue
+            # else:
+            #     # If we can't verify token age, skip it to be safe
+            #     logger.warning(f"   Skipping {pair.get('baseToken', {}).get('symbol')} - couldn't verify token age")
+            #     continue
 
             filtered_pairs.append(pair)
 
@@ -339,8 +383,8 @@ class Dexscreener:
 
     def discover_latest_bsc_tokens_enhanced(
         self,
-        min_liquidity_usd: float = 10000, # Minimum liquidity required in the main trading pair compared to $50 trades.
-        max_age_days: int = 30, # Age of trading pair - more likely to be legitimate (but also good value).
+        min_liquidity_usd: float = 10000, # Minimum liquidity required in the main trading pair compared to $50 trades. 10000 for testing. perhaps 50000 for prod.
+        max_age_days: int = 50, # Age of trading pair - more likely to be legitimate (but also good value).
         limit: int = 50, # 100 would take a long time, 20 would be fewer options at the end but faster.
         min_liquidity_score: int = 80, # Points tally (higher means more legitimate). 80 is a conservative approach.
         trade_size_usd: float = 50 # Large trades on smaller pools would cause slippage and eat into profit.
