@@ -1,0 +1,36 @@
+# Core Dependencies for Super Pancake Crypto Trading Bot
+
+# Web3 & Blockchain
+web3>=6.0.0              # Interact with BSC blockchain
+requests>=2.31.0         # HTTP API calls (DexScreener, GoPlus, Moralis)
+
+# Data Processing & Analysis
+pandas>=2.0.0            # Data manipulation and time-series
+numpy>=1.24.0            # Numerical computing
+ta-lib>=0.4.28           # Technical analysis indicators (optional, may require system install)
+
+# Database
+psycopg2-binary>=2.9.0   # PostgreSQL adapter
+
+# Backtesting
+backtesting>=0.3.3       # Strategy backtesting framework
+
+# Configuration & Environment
+python-dotenv>=1.0.0     # Load .env files
+
+# Alerts & Notifications
+python-telegram-bot>=20.0  # Telegram bot for alerts (optional)
+
+# Web Dashboard (Optional - for later phases)
+flask>=3.0.0             # Lightweight web framework
+streamlit>=1.28.0        # Data app framework (alternative to Flask)
+
+# Development & Testing
+pytest>=7.4.0            # Testing framework
+black>=23.0.0            # Code formatter
+flake8>=6.1.0            # Linter
+
+# Note: ta-lib may require system-level install on some systems:
+# Ubuntu/Debian: sudo apt-get install libta-lib0-dev
+# Mac: brew install ta-lib
+# Windows: Download from https://www.lfd.uci.edu/~gohlke/pythonlibs/#ta-lib
