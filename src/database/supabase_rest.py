@@ -80,7 +80,7 @@ class SupabaseREST:
 
         # Use upsert with on_conflict to handle duplicates
         try:
-            url = f"{self.base_url}/discovered_tokens"
+            url = f"{self.base_url}/discovered_tokens?on_conflict=chain_id,token_address"
             headers = self.headers.copy()
             headers['Prefer'] = 'resolution=ignore-duplicates,return=minimal'
 
@@ -92,11 +92,9 @@ class SupabaseREST:
             )
 
             if response.status_code == 201:
-                # All inserted
                 stats['inserted'] = len(records)
                 logger.info(f"✅ Inserted {stats['inserted']} new tokens")
             elif response.status_code == 200:
-                # Some may have been duplicates (can't get exact count via REST)
                 stats['inserted'] = len(records)
                 logger.info(f"📊 Processed {stats['inserted']} tokens (some may be duplicates)")
             else:
