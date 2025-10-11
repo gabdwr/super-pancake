@@ -1,6 +1,7 @@
 import psycopg2
 from dotenv import load_dotenv
 import os
+import socket
 import logging
 from typing import List, Dict, Optional
 from datetime import datetime
@@ -34,9 +35,9 @@ class Supabase:
         try:
             # Force IPv4 resolution for GitHub Actions compatibility
             # psycopg2 sometimes tries IPv6 first, which fails on GitHub runners
-            import socket
 
             # Resolve hostname to IPv4 address only
+            logger.info(f"Attempting to connect to Supabase: {self.host}:{self.port}")
             try:
                 ipv4_host = socket.getaddrinfo(
                     self.host,
@@ -44,11 +45,12 @@ class Supabase:
                     socket.AF_INET,  # Force IPv4
                     socket.SOCK_STREAM
                 )[0][4][0]
-                logger.debug(f"Resolved {self.host} to IPv4: {ipv4_host}")
+                logger.info(f"✅ Resolved {self.host} to IPv4: {ipv4_host}")
                 host_to_use = ipv4_host
-            except socket.gaierror:
+            except socket.gaierror as dns_error:
                 # If IPv4 resolution fails, fall back to original hostname
-                logger.warning(f"Could not resolve {self.host} to IPv4, using hostname")
+                logger.warning(f"⚠️ Could not resolve {self.host} to IPv4: {dns_error}")
+                logger.warning(f"Falling back to hostname: {self.host}")
                 host_to_use = self.host
 
             connection = psycopg2.connect(
