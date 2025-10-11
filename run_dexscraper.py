@@ -1,6 +1,7 @@
 import logging
 from src.discovery.dexscraper import Dexscraper
 from src.database.supabase import Supabase
+from src.database.supabase_rest import SupabaseREST
 from src.utils.telegram_alerts import TelegramAlert
 
 # Configure logging
@@ -31,7 +32,8 @@ def run_dexscraper():
 
         # Store in Supabase database
         logger.info("💾 Storing tokens in Supabase...")
-        supabase = Supabase()
+        # supabase = Supabase()
+        supabase = SupabaseREST()
         stats = supabase.store_discovered_tokens(new_tokens)
 
         # Log results

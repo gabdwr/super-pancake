@@ -217,5 +217,5 @@ if __name__ == "__main__":
     client = SupabaseREST()
 
     # Test fetch
-    tokens = client.get_all_tokens(limit=5)
+    tokens = client.get_all_tokens(limit=500)
     print(f"Found {len(tokens)} tokens")
