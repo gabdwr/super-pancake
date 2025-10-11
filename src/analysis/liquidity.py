@@ -61,67 +61,76 @@ class LiquidityAnalyzer:
             '0x0000000000000000000000000000000000000000',
         }
 
-    def analyze_all_pairs(self, token_address: str) -> List[Dict]:
-        """
-        Get all trading pairs for a token across all DEXs
+    # def analyze_all_pairs(self, token_address: str) -> List[Dict]:
+    #     """
+    #     Get all trading pairs for a token across all DEXs
 
-        Args:
-            token_address: Token contract address
+    #     Args:
+    #         token_address: Token contract address
 
-        Returns:
-            List of pair dictionaries with liquidity and volume data
-        """
-        try:
-            url = f"{self.dexscreener_api}/{token_address}"
-            response = requests.get(url, timeout=10)
-            time.sleep(self.rate_limit_delay)
+    #     Returns:
+    #         List of pair dictionaries with liquidity and volume data
+    #     """
+    #     try:
+    #         url = f"{self.dexscreener_api}/{token_address}"
+    #         response = requests.get(url, timeout=10)
+    #         time.sleep(self.rate_limit_delay)
 
-            if response.status_code != 200:
-                logger.warning(f"Failed to fetch pairs for {token_address}: {response.status_code}")
-                return []
+    #         if response.status_code != 200:
+    #             logger.warning(f"Failed to fetch pairs for {token_address}: {response.status_code}")
+    #             return []
 
-            data = response.json()
-            pairs = data.get('pairs', [])
+    #         data = response.json()
+    #         pairs = data.get('pairs', [])
 
-            # Filter for BSC chain only
-            bsc_pairs = [p for p in pairs if p.get('chainId') == 'bsc']
+    #         # Filter for BSC chain only
+    #         bsc_pairs = [p for p in pairs if p.get('chainId') == 'bsc']
 
-            logger.info(f"Found {len(bsc_pairs)} BSC pairs for token {token_address}")
-            return bsc_pairs
+    #         logger.info(f"Found {len(bsc_pairs)} BSC pairs for token {token_address}")
+    #         return bsc_pairs
 
-        except Exception as e:
-            logger.error(f"Error fetching pairs for {token_address}: {e}")
-            return []
+    #     except Exception as e:
+    #         logger.error(f"Error fetching pairs for {token_address}: {e}")
+    #         return []
 
     def calculate_liquidity_concentration(self, pairs: List[Dict]) -> Dict:
         """
-        Calculate liquidity concentration ratio (main pair vs all pairs)
+        Calculate liquidity concentration ratio with numerical scoring for time-series analysis.
 
-        A healthy token has >80% liquidity in main pair.
-        Fragmented liquidity (<50%) is a red flag.
+        Evaluates if liquidity is concentrated (healthy) or fragmented (risky).
+        Returns both categorical flag and numerical score (0-100) for trend tracking.
+
+        Scoring:
+        - 80-100: HEALTHY (concentrated, safe)
+        - 50-79: CAUTION (moderate fragmentation)
+        - 0-49: RED_FLAG (dangerously fragmented)
 
         Args:
-            pairs: List of pair dictionaries
+            pairs: List of pair dictionaries from DexScreener
 
         Returns:
             {
-                'concentration_ratio': float (0-1),
-                'total_liquidity': float,
-                'main_pair_liquidity': float,
-                'pair_count': int,
-                'flag': 'HEALTHY' | 'CAUTION' | 'RED_FLAG'
+                'concentration_ratio': float (0-1),       # Main pair / Total liquidity
+                'concentration_score': float (0-100),     # Numerical score for time-series
+                'total_liquidity': float,                 # Sum of all pairs liquidity USD
+                'main_pair_liquidity': float,             # Largest pair liquidity USD
+                'pair_count': int,                        # Number of trading pairs
+                'flag': 'HEALTHY' | 'CAUTION' | 'RED_FLAG',
+                'main_pair_dex': str                      # DEX name of main pair
             }
         """
         if not pairs:
             return {
-                'concentration_ratio': 0,
-                'total_liquidity': 0,
-                'main_pair_liquidity': 0,
+                'concentration_ratio': 0.0,
+                'concentration_score': 0.0,
+                'total_liquidity': 0.0,
+                'main_pair_liquidity': 0.0,
                 'pair_count': 0,
-                'flag': 'RED_FLAG'
+                'flag': 'RED_FLAG',
+                'main_pair_dex': None
             }
 
-        # Sort pairs by liquidity
+        # Sort pairs by liquidity (highest first)
         sorted_pairs = sorted(
             pairs,
             key=lambda p: p.get('liquidity', {}).get('usd', 0),
@@ -129,33 +138,55 @@ class LiquidityAnalyzer:
         )
 
         total_liquidity = sum(p.get('liquidity', {}).get('usd', 0) for p in pairs)
-        main_pair_liquidity = sorted_pairs[0].get('liquidity', {}).get('usd', 0)
+        main_pair = sorted_pairs[0]
+        main_pair_liquidity = main_pair.get('liquidity', {}).get('usd', 0)
+        main_pair_dex = main_pair.get('dexId', 'unknown')
 
         concentration_ratio = main_pair_liquidity / total_liquidity if total_liquidity > 0 else 0
 
-        # Determine flag - adjusted for established tokens with high liquidity
-        # Major tokens (>$10M liquidity) can safely have multiple pairs
-        if total_liquidity > 10_000_000:  # $10M+ = established token
+        # Determine flag and score based on liquidity tier
+        # Target range: $500K-$5M liquidity (per your strategy)
+        if total_liquidity > 10_000_000:  # $10M+ = Established token (not your target)
+            # Multiple pairs acceptable for large tokens
             if concentration_ratio >= 0.3 and main_pair_liquidity > 5_000_000:
-                flag = 'HEALTHY'  # Multiple pairs OK for major tokens
+                flag = 'HEALTHY'
+                score = 80 + (concentration_ratio * 20)  # 80-100
             elif concentration_ratio >= 0.2:
                 flag = 'CAUTION'
+                score = 50 + (concentration_ratio * 30)  # 50-80
             else:
                 flag = 'RED_FLAG'
-        else:  # Smaller tokens should be more concentrated
-            if concentration_ratio >= 0.8:
+                score = concentration_ratio * 50  # 0-50
+
+        elif total_liquidity >= 500_000:  # $500K-$10M = Your target range
+            # Target tokens should be concentrated (lower rug risk)
+            if concentration_ratio >= 0.75:  # 75%+ in main pair
                 flag = 'HEALTHY'
-            elif concentration_ratio >= 0.5:
+                score = 85 + (concentration_ratio * 15)  # 85-100
+            elif concentration_ratio >= 0.6:  # 60-75% acceptable
                 flag = 'CAUTION'
+                score = 60 + (concentration_ratio * 25)  # 60-85
+            else:  # <60% = fragmented (risky)
+                flag = 'RED_FLAG'
+                score = concentration_ratio * 60  # 0-60
+
+        else:  # <$500K = Low liquidity (very risky, not your target)
+            # Small tokens MUST be highly concentrated or it's a scam
+            if concentration_ratio >= 0.9:
+                flag = 'CAUTION'  # Even concentrated, low liquidity = risky
+                score = 40 + (concentration_ratio * 20)  # 40-60
             else:
                 flag = 'RED_FLAG'
+                score = concentration_ratio * 40  # 0-40
 
         return {
-            'concentration_ratio': concentration_ratio,
-            'total_liquidity': total_liquidity,
-            'main_pair_liquidity': main_pair_liquidity,
+            'concentration_ratio': round(concentration_ratio, 4),
+            'concentration_score': round(score, 2),
+            'total_liquidity': round(total_liquidity, 2),
+            'main_pair_liquidity': round(main_pair_liquidity, 2),
             'pair_count': len(pairs),
-            'flag': flag
+            'flag': flag,
+            'main_pair_dex': main_pair_dex
         }
 
     def verify_liquidity_lock(self, pair_address: str, lp_token_address: Optional[str] = None) -> Dict:
