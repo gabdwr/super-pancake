@@ -1,5 +1,6 @@
 import logging
 from src.database.supabase import Supabase
+from src.database.supabase_rest import SupabaseREST
 from src.discovery.dexscraper import Dexscraper
 from src.utils.telegram_alerts import TelegramAlert
 
@@ -19,7 +20,8 @@ def run_datafetch():
         logger.info("🚀 Starting data fetch for all tokens...")
 
         # Pull entire supabase
-        supabase = Supabase()
+        # supabase = Supabase()
+        supabase = SupabaseREST()
         all_tokens = supabase.get_all_tokens()
         logger.info(f"✅ Retrieved {len(all_tokens)} tokens.")
 
