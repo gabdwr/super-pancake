@@ -12,9 +12,6 @@ on:
 jobs:
   scrape-tokens:
     runs-on: ubuntu-latest
-    env:
-      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
 
     steps:
       - name: 📥 Checkout code
@@ -41,6 +38,8 @@ jobs:
           SUPABASE_DBNAME=${{ secrets.SUPABASE_DBNAME }}
           TELEGRAM_BOT_TOKEN=${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
           EOF
 
       - name: ⛏️ Run DexScreener scraper
