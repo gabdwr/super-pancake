@@ -32,10 +32,29 @@ class Supabase:
             psycopg2 connection object
         """
         try:
+            # Force IPv4 resolution for GitHub Actions compatibility
+            # psycopg2 sometimes tries IPv6 first, which fails on GitHub runners
+            import socket
+
+            # Resolve hostname to IPv4 address only
+            try:
+                ipv4_host = socket.getaddrinfo(
+                    self.host,
+                    self.port,
+                    socket.AF_INET,  # Force IPv4
+                    socket.SOCK_STREAM
+                )[0][4][0]
+                logger.debug(f"Resolved {self.host} to IPv4: {ipv4_host}")
+                host_to_use = ipv4_host
+            except socket.gaierror:
+                # If IPv4 resolution fails, fall back to original hostname
+                logger.warning(f"Could not resolve {self.host} to IPv4, using hostname")
+                host_to_use = self.host
+
             connection = psycopg2.connect(
                 user=self.user,
                 password=self.password,
-                host=self.host,
+                host=host_to_use,  # Use resolved IPv4 address
                 port=self.port,
                 dbname=self.dbname
             )
