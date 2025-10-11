@@ -33,24 +33,24 @@ class Supabase:
             psycopg2 connection object
         """
         try:
-            # Force IPv4 resolution for GitHub Actions compatibility
-            # psycopg2 sometimes tries IPv6 first, which fails on GitHub runners
+            # Check if required credentials exist
+            if not self.host or not self.user or not self.password:
+                raise ValueError("Missing required Supabase credentials (host, user, or password)")
 
-            # Resolve hostname to IPv4 address only
+            # Force IPv4 resolution for GitHub Actions compatibility
+            # GitHub Actions runners don't support IPv6
             logger.info(f"Attempting to connect to Supabase: {self.host}:{self.port}")
+
+            # Try to resolve to IPv4 only
             try:
-                ipv4_host = socket.getaddrinfo(
-                    self.host,
-                    self.port,
-                    socket.AF_INET,  # Force IPv4
-                    socket.SOCK_STREAM
-                )[0][4][0]
+                # gethostbyname only returns IPv4 addresses
+                ipv4_host = socket.gethostbyname(self.host)
                 logger.info(f"✅ Resolved {self.host} to IPv4: {ipv4_host}")
                 host_to_use = ipv4_host
-            except socket.gaierror as dns_error:
-                # If IPv4 resolution fails, fall back to original hostname
-                logger.warning(f"⚠️ Could not resolve {self.host} to IPv4: {dns_error}")
-                logger.warning(f"Falling back to hostname: {self.host}")
+            except (socket.gaierror, socket.herror) as dns_error:
+                # If DNS resolution fails entirely
+                logger.error(f"❌ DNS resolution failed for {self.host}: {dns_error}")
+                logger.info("Trying direct connection with hostname...")
                 host_to_use = self.host
 
             connection = psycopg2.connect(
