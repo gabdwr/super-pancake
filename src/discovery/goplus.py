@@ -77,56 +77,87 @@ class GoPlus:
         
         self.api_calls.append(time())
     
-    def fetch_token_security(self, token_address: str, chain_id: str = 'bsc') -> Optional[Dict]:
+    def fetch_token_security(self, token_address: str, chain_id: str = 'bsc', max_retries: int = 3) -> Optional[Dict]:
         """
-        Fetch security data for a token from GoPlus API
-        
+        Fetch security data for a token from GoPlus API with retry logic
+
         Args:
             token_address: Token contract address
             chain_id: Chain identifier ('bsc', 'eth', 'arbitrum', etc.)
-        
+            max_retries: Number of retry attempts if rate limited
+
         Returns:
             Dict with security metrics, or None if failed
         """
-        self._rate_limit()
-        
         # Convert chain_id to numeric format
         numeric_chain_id = self.CHAIN_IDS.get(chain_id.lower(), '56')
-        
+
         # GoPlus expects lowercase addresses
         token_address = token_address.lower()
-        
+
         url = f"{self.base_url}/token_security/{numeric_chain_id}"
         params = {'contract_addresses': token_address}
-        
-        try:
-            response = requests.get(url, params=params, timeout=10)
-            
-            if response.status_code != 200:
-                logger.warning(f"GoPlus API error: HTTP {response.status_code}")
-                return None
-            
-            data = response.json()
-            
-            # Check if response is valid
-            if data.get('code') != 1:
-                logger.warning(f"GoPlus API returned error: {data.get('message')}")
-                return None
-            
-            # Extract token data
-            result = data.get('result', {})
-            token_data = result.get(token_address)
 
-            if not token_data:
-                logger.warning(f"No security data found for {token_address} on chain {chain_id}")
-                return None
-            
-            # Parse and return relevant fields
-            return self._parse_security_data(token_data)
-            
-        except Exception as e:
-            logger.error(f"Error fetching GoPlus data for {token_address}: {e}")
-            return None
+        for attempt in range(max_retries):
+            try:
+                # Apply rate limiting before each attempt
+                self._rate_limit()
+
+                response = requests.get(url, params=params, timeout=10)
+
+                # Handle rate limiting (429 or 503)
+                if response.status_code in [429, 503]:
+                    if attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 5  # 5s, 10s, 15s
+                        logger.warning(f"⏳ GoPlus rate limited, waiting {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                        sleep(wait_time)
+                        continue
+                    else:
+                        logger.warning(f"GoPlus API rate limited after {max_retries} attempts")
+                        return None
+
+                if response.status_code != 200:
+                    logger.warning(f"GoPlus API error: HTTP {response.status_code}")
+                    return None
+
+                data = response.json()
+
+                # Check if response is valid
+                if data.get('code') != 1:
+                    error_msg = data.get('message', 'Unknown error')
+
+                    # Retry on "too many requests" error
+                    if 'too many requests' in error_msg.lower() and attempt < max_retries - 1:
+                        wait_time = (attempt + 1) * 5
+                        logger.warning(f"⏳ GoPlus rate limited, waiting {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                        sleep(wait_time)
+                        continue
+
+                    logger.warning(f"GoPlus API returned error: {error_msg}")
+                    return None
+
+                # Extract token data
+                result = data.get('result', {})
+                token_data = result.get(token_address)
+
+                if not token_data:
+                    logger.debug(f"No security data found for {token_address} on chain {chain_id}")
+                    return None
+
+                # Parse and return relevant fields
+                return self._parse_security_data(token_data)
+
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    wait_time = (attempt + 1) * 5
+                    logger.warning(f"Error fetching GoPlus data, retrying in {wait_time}s: {e}")
+                    sleep(wait_time)
+                    continue
+                else:
+                    logger.error(f"Error fetching GoPlus data after {max_retries} attempts: {e}")
+                    return None
+
+        return None
     
     def _parse_security_data(self, raw_data: Dict) -> Dict:
         """

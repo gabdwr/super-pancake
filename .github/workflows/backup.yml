@@ -8,6 +8,10 @@ on:
   # Allow manual triggering
   workflow_dispatch:
 
+# Grant write permissions to the workflow
+permissions:
+  contents: write
+
 jobs:
   backup:
     runs-on: ubuntu-latest
@@ -17,6 +21,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
