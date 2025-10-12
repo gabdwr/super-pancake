@@ -3,7 +3,7 @@ name: Token Metrics Daily Fetch
 # Run once per day to collect metrics for all discovered tokens
 on:
   schedule:
-    # Runs daily at midnight UTC (adjust time as needed)
+    # Runs hourly at minute 0 UTC
     - cron: '0 * * * *'
 
   # Allow manual triggering from GitHub Actions UI
