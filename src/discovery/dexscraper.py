@@ -143,39 +143,89 @@ class Dexscraper:
     def fetch_token_metrics(self, token_address: str) -> Dict:
         """
         Fetch all metrics for a token from DexScreener API.
-        Returns price, liquidity, volume, trading data.
+        Returns price, liquidity, volume, trading data across multiple timeframes.
         """
         # Rate limit: 300 requests/minute for token endpoints
         self._rate_limit_tokens()
 
         url = f"https://api.dexscreener.com/latest/dex/tokens/{token_address}"
         response = requests.get(url, timeout=30)
-        
+
         if response.status_code != 200:
+            logger.warning(f"Failed to fetch metrics for {token_address}: HTTP {response.status_code}")
             return None
-        
+
         data = response.json()
         pairs = data.get('pairs', [])
-        
+
         if not pairs:
+            logger.warning(f"No pairs found for {token_address}")
             return None
-        
+
         # Get main pair (highest liquidity)
         main_pair = max(pairs, key=lambda p: p.get('liquidity', {}).get('usd', 0))
-        
+
         # Sum all liquidity
         total_liquidity = sum(p.get('liquidity', {}).get('usd', 0) for p in pairs)
-        
+
+        # Extract volume data for all timeframes
+        volume = main_pair.get('volume', {})
+
+        # Extract price change data for all timeframes
+        price_change = main_pair.get('priceChange', {})
+
+        # Extract transaction data for all timeframes
+        txns = main_pair.get('txns', {})
+
+        # Extract pair creation timestamp (Unix milliseconds -> datetime)
+        pair_created_at = main_pair.get('pairCreatedAt')
+        if pair_created_at:
+            pair_created_at = datetime.fromtimestamp(pair_created_at / 1000).isoformat()
+
         return {
+            # Basic price & liquidity
             'price_usd': float(main_pair.get('priceUsd', 0)),
             'liquidity_usd': total_liquidity,
-            'volume_24h': main_pair.get('volume', {}).get('h24', 0),
-            'price_change_24h': main_pair.get('priceChange', {}).get('h24', 0),
-            'buys_24h': main_pair.get('txns', {}).get('h24', {}).get('buys', 0),
-            'sells_24h': main_pair.get('txns', {}).get('h24', {}).get('sells', 0),
+            'pair_count': len(pairs),
+
+            # Market valuation
+            'fdv': main_pair.get('fdv'),
+            'market_cap': main_pair.get('marketCap'),
+
+            # Volume - multi-timeframe
+            'volume_24h': volume.get('h24', 0),
+            'volume_h6': volume.get('h6', 0),
+            'volume_h1': volume.get('h1', 0),
+            'volume_m5': volume.get('m5', 0),
+
+            # Price changes - multi-timeframe
+            'price_change_24h': price_change.get('h24', 0),
+            'price_change_h6': price_change.get('h6', 0),
+            'price_change_h1': price_change.get('h1', 0),
+            'price_change_m5': price_change.get('m5', 0),
+
+            # Transactions - 24h
+            'buys_24h': txns.get('h24', {}).get('buys', 0),
+            'sells_24h': txns.get('h24', {}).get('sells', 0),
+
+            # Transactions - 6h
+            'buys_h6': txns.get('h6', {}).get('buys', 0),
+            'sells_h6': txns.get('h6', {}).get('sells', 0),
+
+            # Transactions - 1h
+            'buys_h1': txns.get('h1', {}).get('buys', 0),
+            'sells_h1': txns.get('h1', {}).get('sells', 0),
+
+            # Transactions - 5m
+            'buys_m5': txns.get('m5', {}).get('buys', 0),
+            'sells_m5': txns.get('m5', {}).get('sells', 0),
+
+            # Pair info
             'main_dex': main_pair.get('dexId'),
             'pair_address': main_pair.get('pairAddress'),
-            'pair_count': len(pairs)
+            'base_token_symbol': main_pair.get('baseToken', {}).get('symbol'),
+            'quote_token_symbol': main_pair.get('quoteToken', {}).get('symbol'),
+            'pair_created_at': pair_created_at
         }
 
     @property

@@ -32,7 +32,7 @@ def run_dexscraper():
 
         # Store in Supabase database
         logger.info("💾 Storing tokens in Supabase...")
-        # supabase = Supabase()
+        # supabase = Supabase() # Not using REST API
         supabase = SupabaseREST()
         stats = supabase.store_discovered_tokens(new_tokens)
 

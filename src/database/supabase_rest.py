@@ -132,17 +132,69 @@ class SupabaseREST:
                 'token_address': token_address,
                 'chain_id': chain_id,
                 'snapshot_at': datetime.now().isoformat(),
+
+                # Basic price & liquidity
                 'price_usd': metrics_data.get('price_usd'),
                 'liquidity_usd': metrics_data.get('liquidity_usd'),
+                'pair_count': metrics_data.get('pair_count'),
+
+                # Market valuation
+                'fdv': metrics_data.get('fdv'),
+                'market_cap': metrics_data.get('market_cap'),
+
+                # Volume - multi-timeframe
                 'volume_24h': metrics_data.get('volume_24h'),
+                'volume_h6': metrics_data.get('volume_h6'),
+                'volume_h1': metrics_data.get('volume_h1'),
+                'volume_m5': metrics_data.get('volume_m5'),
+
+                # Price changes - multi-timeframe
                 'price_change_24h': metrics_data.get('price_change_24h'),
+                'price_change_h6': metrics_data.get('price_change_h6'),
+                'price_change_h1': metrics_data.get('price_change_h1'),
+                'price_change_m5': metrics_data.get('price_change_m5'),
+
+                # Transactions - 24h
                 'buys_24h': metrics_data.get('buys_24h'),
                 'sells_24h': metrics_data.get('sells_24h'),
+
+                # Transactions - 6h
+                'buys_h6': metrics_data.get('buys_h6'),
+                'sells_h6': metrics_data.get('sells_h6'),
+
+                # Transactions - 1h
+                'buys_h1': metrics_data.get('buys_h1'),
+                'sells_h1': metrics_data.get('sells_h1'),
+
+                # Transactions - 5m
+                'buys_m5': metrics_data.get('buys_m5'),
+                'sells_m5': metrics_data.get('sells_m5'),
+
+                # Pair info
                 'main_dex': metrics_data.get('main_dex'),
                 'pair_address': metrics_data.get('pair_address'),
-                'pair_count': metrics_data.get('pair_count'),
+                'base_token_symbol': metrics_data.get('base_token_symbol'),
+                'quote_token_symbol': metrics_data.get('quote_token_symbol'),
+                'pair_created_at': metrics_data.get('pair_created_at'),
+
+                # GoPlus holder data
                 'holder_count': metrics_data.get('holder_count'),
                 'top_holder_percent': metrics_data.get('top_holder_percent'),
+                'lp_holder_count': metrics_data.get('lp_holder_count'),
+                'lp_locked_percent': metrics_data.get('lp_locked_percent'),
+
+                # GoPlus security flags
+                'is_honeypot': metrics_data.get('is_honeypot'),
+                'buy_tax': metrics_data.get('buy_tax'),
+                'sell_tax': metrics_data.get('sell_tax'),
+                'is_open_source': metrics_data.get('is_open_source'),
+                'is_mintable': metrics_data.get('is_mintable'),
+                'transfer_pausable': metrics_data.get('transfer_pausable'),
+                'can_take_back_ownership': metrics_data.get('can_take_back_ownership'),
+                'owner_address': metrics_data.get('owner_address'),
+
+                # Liquidity concentration (future - from analysis)
+                'concentration_ratio': metrics_data.get('concentration_ratio'),
                 'concentration_score': metrics_data.get('concentration_score')
             }
 
@@ -162,6 +214,7 @@ class SupabaseREST:
                 return True
             else:
                 logger.error(f"❌ Failed to store metrics: HTTP {response.status_code}")
+                logger.error(f"Response body: {response.text}")
                 return False
 
         except Exception as e:
