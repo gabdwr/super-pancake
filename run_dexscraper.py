@@ -1,6 +1,6 @@
 import logging
 from src.discovery.dexscraper import Dexscraper
-from src.database.supabase import Supabase
+# from src.database.supabase import Supabase
 from src.database.supabase_rest import SupabaseREST
 from src.utils.telegram_alerts import TelegramAlert
 
