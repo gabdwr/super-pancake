@@ -1,0 +1,10 @@
+{
+  "backup_timestamp": "20251013_034000",
+  "backup_date": "2025-10-13T03:41:19.502040",
+  "discovered_tokens_count": 287,
+  "time_series_snapshots_count": 270,
+  "files": {
+    "discovered_tokens": "discovered_tokens_20251013_034000.json",
+    "time_series_latest": "time_series_latest_20251013_034000.json"
+  }
+}
