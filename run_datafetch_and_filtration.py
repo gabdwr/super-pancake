@@ -187,8 +187,8 @@ def run_datafetch_and_filtration():
                 if filter_status == 'PASS':
                     tokens_passed += 1
 
-                    # Send instant Telegram alert for PASS tokens
-                    send_pass_alert(tele, token_address, filter_result['details'], dex_data)
+                    # Send instant Telegram alert for PASS tokens -- COMMENTED OUT TOO MUCH NOISE
+                    # send_pass_alert(tele, token_address, filter_result['details'], dex_data)
                 else:
                     tokens_failed += 1
                     # Track failure reasons for summary
