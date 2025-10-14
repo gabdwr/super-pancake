@@ -264,6 +264,103 @@ class SupabaseREST:
             logger.error(f"❌ Error fetching tokens: {e}")
             return []
 
+    def get_cached_goplus_data(self, token_address: str) -> Optional[Dict]:
+        """
+        Get most recent GoPlus data for a token from time_series_data table.
+        Used for graduated tokens to avoid redundant API calls.
+
+        Args:
+            token_address: Token contract address
+
+        Returns:
+            Dict with cached GoPlus data, or None if not available
+        """
+        try:
+            url = f"{self.base_url}/time_series_data"
+            params = {
+                "select": "holder_count,top_holder_percent,lp_holder_count,lp_locked_percent,"
+                          "is_honeypot,buy_tax,sell_tax,is_open_source,is_mintable,"
+                          "transfer_pausable,can_take_back_ownership,owner_address",
+                "token_address": f"eq.{token_address}",
+                "order": "snapshot_at.desc",
+                "limit": 1
+            }
+
+            response = requests.get(
+                url,
+                headers=self.headers,
+                params=params,
+                timeout=30
+            )
+
+            if response.status_code == 200:
+                results = response.json()
+                if results and len(results) > 0:
+                    logger.debug(f"✅ Retrieved cached GoPlus data for {token_address}")
+                    return results[0]
+                else:
+                    logger.warning(f"⚠️  No cached data found for {token_address}")
+                    return None
+            else:
+                logger.error(f"❌ Failed to fetch cached data: HTTP {response.status_code}")
+                return None
+
+        except Exception as e:
+            logger.error(f"❌ Error fetching cached GoPlus data: {e}")
+            return None
+
+    def update_graduation_status(
+        self,
+        token_address: str,
+        graduated: bool,
+        consecutive_passes: int,
+        last_goplus_check: Optional[datetime] = None
+    ) -> bool:
+        """
+        Update graduation status for a token in discovered_tokens table.
+
+        Args:
+            token_address: Token contract address
+            graduated: Graduation status
+            consecutive_passes: Number of consecutive filter passes
+            last_goplus_check: Timestamp of last GoPlus API call (defaults to now)
+
+        Returns:
+            bool: True if successful
+        """
+        try:
+            url = f"{self.base_url}/discovered_tokens"
+            params = {"token_address": f"eq.{token_address}"}
+
+            if last_goplus_check is None:
+                last_goplus_check = datetime.now()
+
+            update_data = {
+                'graduated': graduated,
+                'consecutive_passes': consecutive_passes,
+                'last_goplus_check': last_goplus_check.isoformat()
+            }
+
+            response = requests.patch(
+                url,
+                headers=self.headers,
+                params=params,
+                json=update_data,
+                timeout=30
+            )
+
+            if response.status_code in [200, 204]:
+                logger.debug(f"✅ Updated graduation status for {token_address}")
+                return True
+            else:
+                logger.error(f"❌ Failed to update graduation status: HTTP {response.status_code}")
+                logger.error(f"Response body: {response.text}")
+                return False
+
+        except Exception as e:
+            logger.error(f"❌ Error updating graduation status: {e}")
+            return False
+
 
 # Example usage
 if __name__ == "__main__":

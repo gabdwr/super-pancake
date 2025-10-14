@@ -225,7 +225,10 @@ class Dexscraper:
             'pair_address': main_pair.get('pairAddress'),
             'base_token_symbol': main_pair.get('baseToken', {}).get('symbol'),
             'quote_token_symbol': main_pair.get('quoteToken', {}).get('symbol'),
-            'pair_created_at': pair_created_at
+            'pair_created_at': pair_created_at,
+
+            # Raw pairs data (needed for concentration score calculation)
+            'pairs': pairs
         }
 
     @property

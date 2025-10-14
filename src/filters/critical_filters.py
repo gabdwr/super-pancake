@@ -116,20 +116,20 @@ def apply_critical_filters(
     is_honeypot = goplus_data.get('is_honeypot', '1') == '1'  # Default to True (safe)
     is_mintable = goplus_data.get('is_mintable', '1') == '1'  # Default to True (safe)
 
-    # Parse tax values (GoPlus returns strings like "0.05" for 5%)
+    # Parse tax values (GoPlus already returns percentages 0-100)
     try:
-        buy_tax = float(goplus_data.get('buy_tax', '1.0')) * 100  # Convert to percentage
+        buy_tax = float(goplus_data.get('buy_tax', 100.0))
     except (ValueError, TypeError):
         buy_tax = 100.0  # Default to 100% (safe)
 
     try:
-        sell_tax = float(goplus_data.get('sell_tax', '1.0')) * 100  # Convert to percentage
+        sell_tax = float(goplus_data.get('sell_tax', 100.0))
     except (ValueError, TypeError):
         sell_tax = 100.0  # Default to 100% (safe)
 
-    # Parse LP locked percentage
+    # Parse LP locked percentage (correct field name)
     try:
-        lp_locked_percent = float(goplus_data.get('lp_holder_percent', '0'))
+        lp_locked_percent = float(goplus_data.get('lp_locked_percent', 0))
     except (ValueError, TypeError):
         lp_locked_percent = 0.0
 
