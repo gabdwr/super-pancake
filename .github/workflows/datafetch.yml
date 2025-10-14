@@ -1,10 +1,10 @@
-name: Token Metrics 4x Daily Fetch
+name: Token Metrics Hourly Fetch
 
-# Run 4 times per day (every 6 hours) to collect metrics for all discovered tokens
+# Run every hour to collect metrics and apply filters for all discovered tokens
 on:
   schedule:
-    # Runs every 6 hours: Midnight, 6 AM, Noon, 6 PM UTC
-    - cron: '0 0,6,12,18 * * *'
+    # Runs every hour at :30 (30 minutes after discovery scraper at :00)
+    - cron: '30 * * * *'
 
   # Allow manual triggering from GitHub Actions UI
   workflow_dispatch:
@@ -43,10 +43,10 @@ jobs:
           SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
           EOF
 
-      - name: 📊 Fetch token metrics
+      - name: 📊 Fetch token metrics and apply filters
         id: datafetch
         run: |
-          python run_datafetch.py
+          python run_datafetch_and_filtration.py
         continue-on-error: true
 
       - name: 📈 Check results
@@ -64,26 +64,29 @@ jobs:
           rm -f .env
 
 # Workflow summary:
-# - Runs 4 times per day: 00:00, 06:00, 12:00, 18:00 UTC (every 6 hours)
+# - Runs every hour at :30 (30 minutes after discovery scraper)
 # - Fetches metrics for ALL tokens in discovered_tokens table
+# - Applies critical filters and tags tokens as PASS/FAIL
 # - Calls DexScreener API + GoPlus API for each token (with rate limiting & retries)
 # - Stores time-series snapshots in time_series_data table
+# - Updates filter_status in discovered_tokens table
 # - Sends Telegram notification with summary
 # - Can be manually triggered from GitHub Actions tab
 #
-# Why every 6 hours?
-# - Captures volume_h6 changes perfectly (6-hour volume metric)
-# - 4 snapshots/day = 28 data points over 7 days (sufficient for trend analysis)
-# - API-friendly: 167 tokens × 4 fetches/day = 668 calls/day (sustainable)
-# - Database-friendly: ~20K rows/month (won't hit 500MB limit for years)
+# Why hourly?
+# - Fast filtering: Tokens filtered within ~30 min of discovery (vs 6 hours before)
+# - Fresh data: Catch pumps/dumps early, enable faster decision making
+# - 24 snapshots/day = rich time-series for trend analysis
+# - API limits: 300 tokens × 24 runs = 7,200 calls/day (within free tier)
+#   - DexScreener: 300/min = 18,000/hour (safe)
+#   - GoPlus: 60/min = 3,600/hour (safe)
 #
 # Performance notes:
 # - ~167 tokens: ~3-5 minutes (with rate limiting & retries)
 # - ~300 tokens: ~5-8 minutes
 # - ~1000 tokens: ~15-20 minutes
 #
-# Cron schedule options:
-# '0 0,6,12,18 * * *' = Every 6 hours (current)
-# '0 0,8,16 * * *'    = Every 8 hours (3x daily)
-# '0 0,12 * * *'      = Every 12 hours (2x daily)
-# '0 0 * * *'         = Once daily at midnight
+# Timing:
+# - Discovery runs: :00 (e.g., 1:00, 2:00, 3:00...)
+# - Datafetch runs: :30 (e.g., 1:30, 2:30, 3:30...)
+# - Max delay: 30 minutes from discovery to filtering

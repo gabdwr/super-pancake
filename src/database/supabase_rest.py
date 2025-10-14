@@ -195,7 +195,11 @@ class SupabaseREST:
 
                 # Liquidity concentration (future - from analysis)
                 'concentration_ratio': metrics_data.get('concentration_ratio'),
-                'concentration_score': metrics_data.get('concentration_score')
+                'concentration_score': metrics_data.get('concentration_score'),
+
+                # Filter status (PASS/FAIL at this snapshot)
+                'filter_status': metrics_data.get('filter_status'),
+                'filter_fail_reasons': metrics_data.get('filter_fail_reasons', [])
             }
 
             url = f"{self.base_url}/time_series_data"
