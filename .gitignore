@@ -78,3 +78,6 @@ wallets/
 docs/_build/
 site/
 keys.py
+
+# Markdown documentation files
+*.md
