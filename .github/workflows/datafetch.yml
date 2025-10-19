@@ -41,6 +41,13 @@ jobs:
           TELEGRAM_CHAT_ID=${{ secrets.TELEGRAM_CHAT_ID }}
           SUPABASE_URL=${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          FILTER_ALLOW_HONEYPOT=${{ secrets.FILTER_ALLOW_HONEYPOT }}
+          FILTER_MIN_LP_LOCKED=${{ secrets.FILTER_MIN_LP_LOCKED }}
+          FILTER_MIN_CONCENTRATION=${{ secrets.FILTER_MIN_CONCENTRATION }}
+          FILTER_MIN_LIQUIDITY_USD=${{ secrets.FILTER_MIN_LIQUIDITY_USD }}
+          FILTER_MAX_BUY_TAX=${{ secrets.FILTER_MAX_BUY_TAX }}
+          FILTER_MAX_SELL_TAX=${{ secrets.FILTER_MAX_SELL_TAX }}
+          FILTER_ALLOW_MINTABLE=${{ secrets.FILTER_ALLOW_MINTABLE }}
           EOF
 
       - name: 📊 Fetch token metrics and apply filters

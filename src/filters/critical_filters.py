@@ -1,24 +1,69 @@
 """
-Critical Filters Module
+Critical Filters Module (v3 - Configurable)
 
-This module implements static Tier 1 filters to automatically tag tokens as PASS/FAIL.
+This module implements static Tier 1 filters to automatically tag tokens as PASS/FAIL/PENDING.
 These filters are designed to catch obvious scams and low-quality tokens before
 they enter the watchlist.
 
-7 Critical Filters:
-1. is_honeypot == False
-2. lp_locked_percent >= 60
-3. concentration_score >= 60
-4. liquidity_usd >= 50000
-5. buy_tax <= 10
-6. sell_tax <= 10
-7. is_mintable == False
+CHANGES in v3:
+- All filter thresholds now configurable via environment variables
+- Keeps your exact strategy private (not committed to git)
+- Allows easy tuning without code changes
+
+CHANGES in v2:
+- Added PENDING status for tokens with missing GoPlus data
+- Relaxed thresholds for newly discovered tokens
+- Fixed GoPlus data validation
+
+7 Critical Filters (CONFIGURABLE VIA .env):
+1. is_honeypot == False (configurable: FILTER_ALLOW_HONEYPOT)
+2. lp_locked_percent >= FILTER_MIN_LP_LOCKED (default: 30)
+3. concentration_score >= FILTER_MIN_CONCENTRATION (default: 50)
+4. liquidity_usd >= FILTER_MIN_LIQUIDITY_USD (default: 20000)
+5. buy_tax <= FILTER_MAX_BUY_TAX (default: 10)
+6. sell_tax <= FILTER_MAX_SELL_TAX (default: 10)
+7. is_mintable == False (configurable: FILTER_ALLOW_MINTABLE)
 """
 
 import logging
+import os
 from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
+
+# Load filter thresholds from environment variables
+# These are YOUR secret strategy - not committed to git!
+def _get_bool_env(key: str, default: bool) -> bool:
+    """Helper to parse boolean environment variables"""
+    val = os.getenv(key, str(default)).lower()
+    return val in ('true', '1', 'yes', 'on')
+
+def _get_float_env(key: str, default: float) -> float:
+    """Helper to parse float environment variables"""
+    try:
+        return float(os.getenv(key, str(default)))
+    except ValueError:
+        logger.warning(f"Invalid value for {key}, using default: {default}")
+        return default
+
+# Filter Configuration (loaded from .env)
+FILTER_ALLOW_HONEYPOT = _get_bool_env('FILTER_ALLOW_HONEYPOT', False)
+FILTER_MIN_LP_LOCKED = _get_float_env('FILTER_MIN_LP_LOCKED', 30.0)
+FILTER_MIN_CONCENTRATION = _get_float_env('FILTER_MIN_CONCENTRATION', 50.0)
+FILTER_MIN_LIQUIDITY_USD = _get_float_env('FILTER_MIN_LIQUIDITY_USD', 20000.0)
+FILTER_MAX_BUY_TAX = _get_float_env('FILTER_MAX_BUY_TAX', 10.0)
+FILTER_MAX_SELL_TAX = _get_float_env('FILTER_MAX_SELL_TAX', 10.0)
+FILTER_ALLOW_MINTABLE = _get_bool_env('FILTER_ALLOW_MINTABLE', False)
+
+# Log loaded configuration (on module import)
+logger.info("🔧 Critical Filters Configuration:")
+logger.info(f"   Allow Honeypot: {FILTER_ALLOW_HONEYPOT}")
+logger.info(f"   Min LP Locked: {FILTER_MIN_LP_LOCKED}%")
+logger.info(f"   Min Concentration: {FILTER_MIN_CONCENTRATION}")
+logger.info(f"   Min Liquidity: ${FILTER_MIN_LIQUIDITY_USD:,.0f}")
+logger.info(f"   Max Buy Tax: {FILTER_MAX_BUY_TAX}%")
+logger.info(f"   Max Sell Tax: {FILTER_MAX_SELL_TAX}%")
+logger.info(f"   Allow Mintable: {FILTER_ALLOW_MINTABLE}")
 
 
 def calculate_concentration_score(pairs: List[Dict]) -> float:
@@ -89,6 +134,7 @@ def apply_critical_filters(
     Apply 7 static critical filters to a token.
 
     Returns PASS only if ALL filters pass. Returns FAIL with reasons if any filter fails.
+    Returns PENDING if GoPlus data is missing or invalid (API failure).
 
     Args:
         goplus_data: GoPlus security data for the token
@@ -97,41 +143,64 @@ def apply_critical_filters(
 
     Returns:
         {
-            'status': 'PASS' | 'FAIL',
-            'reasons': List[str],  # Empty if PASS, contains failure reasons if FAIL
+            'status': 'PASS' | 'FAIL' | 'PENDING',
+            'reasons': List[str],  # Empty if PASS, contains failure reasons if FAIL/PENDING
             'details': {
-                'is_honeypot': bool,
+                'is_honeypot': bool or None,
                 'lp_locked_percent': float,
                 'concentration_score': float,
                 'liquidity_usd': float,
-                'buy_tax': float,
-                'sell_tax': float,
-                'is_mintable': bool
+                'buy_tax': float or None,
+                'sell_tax': float or None,
+                'is_mintable': bool or None
             }
         }
     """
     reasons = []
 
-    # Extract GoPlus data (handle missing data gracefully)
-    is_honeypot = goplus_data.get('is_honeypot', '1') == '1'  # Default to True (safe)
-    is_mintable = goplus_data.get('is_mintable', '1') == '1'  # Default to True (safe)
+    # CRITICAL: Validate GoPlus data before using it
+    # If buy_tax or sell_tax is None/missing, GoPlus API failed or returned invalid data
+    goplus_valid = (
+        goplus_data and
+        goplus_data.get('buy_tax') is not None and
+        goplus_data.get('sell_tax') is not None and
+        goplus_data.get('is_honeypot') is not None
+    )
 
-    # Parse tax values (GoPlus already returns percentages 0-100)
-    try:
-        buy_tax = float(goplus_data.get('buy_tax', 100.0))
-    except (ValueError, TypeError):
-        buy_tax = 100.0  # Default to 100% (safe)
+    if not goplus_valid:
+        logger.info("⏸️  GoPlus data missing or invalid - marking as PENDING")
 
-    try:
-        sell_tax = float(goplus_data.get('sell_tax', 100.0))
-    except (ValueError, TypeError):
-        sell_tax = 100.0  # Default to 100% (safe)
+        # Calculate what we can without GoPlus
+        concentration_score = calculate_concentration_score(pairs)
+        liquidity_usd = 0.0
+        if pairs:
+            main_pair = max(pairs, key=lambda p: p.get('liquidity', {}).get('usd', 0))
+            liquidity_usd = main_pair.get('liquidity', {}).get('usd', 0)
 
-    # Parse LP locked percentage (correct field name)
-    try:
-        lp_locked_percent = float(goplus_data.get('lp_locked_percent', 0))
-    except (ValueError, TypeError):
-        lp_locked_percent = 0.0
+        return {
+            'status': 'PENDING',
+            'reasons': ['goplus_data_missing_or_invalid'],
+            'details': {
+                'is_honeypot': None,
+                'lp_locked_percent': 0.0,
+                'concentration_score': concentration_score,
+                'liquidity_usd': round(liquidity_usd, 2),
+                'buy_tax': None,
+                'sell_tax': None,
+                'is_mintable': None
+            }
+        }
+
+    # GoPlus data is valid - extract values
+    is_honeypot = goplus_data.get('is_honeypot', False)
+    is_mintable = goplus_data.get('is_mintable', False)
+
+    # Parse tax values (GoPlus returns percentages 0-100)
+    buy_tax = float(goplus_data.get('buy_tax', 0))
+    sell_tax = float(goplus_data.get('sell_tax', 0))
+
+    # Parse LP locked percentage
+    lp_locked_percent = float(goplus_data.get('lp_locked_percent', 0))
 
     # Calculate concentration score from pairs
     concentration_score = calculate_concentration_score(pairs)
@@ -142,33 +211,33 @@ def apply_critical_filters(
         main_pair = max(pairs, key=lambda p: p.get('liquidity', {}).get('usd', 0))
         liquidity_usd = main_pair.get('liquidity', {}).get('usd', 0)
 
-    # Apply filters
-    # Filter 1: is_honeypot == False
-    if is_honeypot:
+    # Apply filters with CONFIGURABLE THRESHOLDS (from .env)
+    # Filter 1: is_honeypot check
+    if not FILTER_ALLOW_HONEYPOT and is_honeypot:
         reasons.append('honeypot_detected')
 
-    # Filter 2: lp_locked_percent >= 60
-    if lp_locked_percent < 60:
+    # Filter 2: LP locked percentage
+    if lp_locked_percent < FILTER_MIN_LP_LOCKED:
         reasons.append(f'lp_locked_too_low_{lp_locked_percent:.1f}%')
 
-    # Filter 3: concentration_score >= 60
-    if concentration_score < 60:
+    # Filter 3: Concentration score
+    if concentration_score < FILTER_MIN_CONCENTRATION:
         reasons.append(f'concentration_too_low_{concentration_score:.1f}')
 
-    # Filter 4: liquidity_usd >= 50000
-    if liquidity_usd < 50000:
+    # Filter 4: Minimum liquidity USD
+    if liquidity_usd < FILTER_MIN_LIQUIDITY_USD:
         reasons.append(f'liquidity_too_low_${liquidity_usd:.0f}')
 
-    # Filter 5: buy_tax <= 10
-    if buy_tax > 10:
+    # Filter 5: Maximum buy tax
+    if buy_tax > FILTER_MAX_BUY_TAX:
         reasons.append(f'buy_tax_too_high_{buy_tax:.1f}%')
 
-    # Filter 6: sell_tax <= 10
-    if sell_tax > 10:
+    # Filter 6: Maximum sell tax
+    if sell_tax > FILTER_MAX_SELL_TAX:
         reasons.append(f'sell_tax_too_high_{sell_tax:.1f}%')
 
-    # Filter 7: is_mintable == False
-    if is_mintable:
+    # Filter 7: Mintable token check
+    if not FILTER_ALLOW_MINTABLE and is_mintable:
         reasons.append('token_is_mintable')
 
     # Determine status
@@ -190,8 +259,8 @@ def apply_critical_filters(
 
     # Log result
     if status == 'PASS':
-        logger.info(f"Token PASSED all critical filters")
+        logger.info("✅ Token PASSED all critical filters")
     else:
-        logger.info(f"Token FAILED critical filters: {', '.join(reasons)}")
+        logger.info(f"❌ Token FAILED critical filters: {', '.join(reasons)}")
 
     return result
