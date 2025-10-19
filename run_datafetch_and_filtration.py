@@ -121,6 +121,7 @@ def run_datafetch_and_filtration():
         failed_fetches = 0
         tokens_passed = 0
         tokens_failed = 0
+        tokens_pending = 0  # NEW: Track PENDING status
         goplus_api_calls = 0
         goplus_cached = 0
         graduated_count = 0
@@ -187,9 +188,14 @@ def run_datafetch_and_filtration():
                 if filter_status == 'PASS':
                     tokens_passed += 1
 
-                    # Send instant Telegram alert for PASS tokens -- COMMENTED OUT TOO MUCH NOISE
-                    # send_pass_alert(tele, token_address, filter_result['details'], dex_data)
-                else:
+                    # Send instant Telegram alert for PASS tokens
+                    send_pass_alert(tele, token_address, filter_result['details'], dex_data)
+                elif filter_status == 'PENDING':
+                    tokens_pending += 1
+                    # Track pending reason
+                    for reason in filter_reasons:
+                        failure_reasons_count[reason] = failure_reasons_count.get(reason, 0) + 1
+                else:  # FAIL
                     tokens_failed += 1
                     # Track failure reasons for summary
                     for reason in filter_reasons:
@@ -263,6 +269,7 @@ def run_datafetch_and_filtration():
         logger.info(f"   Failed: {failed_fetches}/{len(all_tokens)}")
         logger.info(f"   Passed filters: {tokens_passed}")
         logger.info(f"   Failed filters: {tokens_failed}")
+        logger.info(f"   Pending (missing data): {tokens_pending}")
         logger.info(f"   GoPlus API calls: {goplus_api_calls}")
         logger.info(f"   GoPlus cached: {goplus_cached}")
         logger.info(f"   New graduations: {graduated_count}")
@@ -302,7 +309,8 @@ def run_datafetch_and_filtration():
             f"❌ Failed: {failed_fetches}\n\n"
             f"🎯 Filter Results:\n"
             f"✅ PASS: {tokens_passed}\n"
-            f"❌ FAIL: {tokens_failed}"
+            f"❌ FAIL: {tokens_failed}\n"
+            f"⏸️  PENDING: {tokens_pending}"
             f"{failure_summary}"
             f"{graduation_summary}"
         )
